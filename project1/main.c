@@ -8,12 +8,28 @@ int main(void)
 char *args[MAX_LINE/2 + 1]; /* command line arguments */
 int should_run = 1; /* flag to determine when to exit program */
 
+char line[MAX_LINE]; // line to store the user input
+char history[100][MAX_LINE]; // history to store the previous commands
+int history_index = 0; // index to store the current history
+
 while (should_run) {
     printf("osh&#x003E;");
     fflush(stdout);
 
-    // ---------- PART 1 -------------
+    // -------------------- PART 2 --------------------------------
     fgets(line , MAX_LINE , stdin);
+
+    // --- PART 3 (!! History) ---
+    if (strcmp(line , "!!") == 0){ // if the user inputs !!, print the previous command
+        if (history_index == 0){
+            printf("No previous commands\n");
+            continue;
+        }
+        strcpy(line , history[history_index - 1]);
+    }
+    else{ // if the user inputs a command, add it to the history
+        strcpy(history[history_index++] , line);
+    }
 
     char *token = strtok(line , " \n"); // splitting the line into tokens
     int i = 0;
@@ -22,8 +38,7 @@ while (should_run) {
         token = strtok(NULL , " ");
     } // looping through the tokens until NULL, adding them to the args array
     args[i] = NULL; // adding NULL to the end of the args array
-
-    // args -> [ps , ael , NULL]
+    // args -> [ps , ael , NULL] **EXAMPLE**
 
     pid_t pid = fork(); // forking a child process
     if (pid == 0){
