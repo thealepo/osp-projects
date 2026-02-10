@@ -40,6 +40,20 @@ while (should_run) {
     args[i] = NULL; // adding NULL to the end of the args array
     // args -> [ps , ael , NULL] **EXAMPLE**
 
+    // --- PART 4 (> and <)
+    for (int j = 0 ; j < i ; j++){
+        if (strcmp(args[j] , ">") == 0){
+            // redirecting output to a file
+            int fd = open(args[j+1])
+            dup2(fd , STDOUT_FILENO);
+        }
+        else if (strcmp(args[j] , "<") == 0){
+            // redirecting input from a file
+            int fd = open(args[j+1])
+            dup2(fd , STDIN_FILENO);
+        }
+    }
+
     pid_t pid = fork(); // forking a child process
     if (pid == 0){
         execvp(args[0] , args); // executing the command if it is a child process
