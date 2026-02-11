@@ -52,6 +52,22 @@ while (should_run) {
             int fd = open(args[j+1])
             dup2(fd , STDIN_FILENO);
         }
+
+        // ------ PART 5 (PIPE)
+        if (strcmp(args[j] , "|") == 0){
+            int pipefd[j];
+            pipe(pipefd); // creating a pipe
+            pid_t pid = fork(); // forking a child process
+            if (pid == 0){
+                close(pipefd[0]);
+                dup2(pipefd[1] , STDOUT_FILENO);
+                execvp(args[j+1] , args); // executing the command
+            }
+            else{
+                close(pipefd[1]);
+            }
+            wait(NULL);
+        }
     }
 
     pid_t pid = fork(); // forking a child process
