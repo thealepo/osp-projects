@@ -44,12 +44,12 @@ while (should_run) {
     for (int j = 0 ; j < i ; j++){
         if (strcmp(args[j] , ">") == 0){
             // redirecting output to a file
-            int fd = open(args[j+1])
+            int fd = open(args[j+1]);
             dup2(fd , STDOUT_FILENO);
         }
         else if (strcmp(args[j] , "<") == 0){
             // redirecting input from a file
-            int fd = open(args[j+1])
+            int fd = open(args[j+1]);
             dup2(fd , STDIN_FILENO);
         }
 
