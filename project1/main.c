@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 
 #define MAX_LINE 80  /* The maximum length command */
 
@@ -35,7 +38,7 @@ while (should_run) {
     int i = 0;
     while (token != NULL){
         args[i++] = token;
-        token = strtok(NULL , " ");
+        token = strtok(NULL , " \n");
     } // looping through the tokens until NULL, adding them to the args array
     args[i] = NULL; // adding NULL to the end of the args array
     // args -> [ps , ael , NULL] **EXAMPLE**
@@ -44,12 +47,12 @@ while (should_run) {
     for (int j = 0 ; j < i ; j++){
         if (strcmp(args[j] , ">") == 0){
             // redirecting output to a file
-            int fd = open(args[j+1]);
+            int fd = open(args[j+1] , O_CREAT | O_WRONLY | O_TRUNC , 0644);
             dup2(fd , STDOUT_FILENO);
         }
         else if (strcmp(args[j] , "<") == 0){
             // redirecting input from a file
-            int fd = open(args[j+1]);
+            int fd = open(args[j+1] , O_RDONLY);
             dup2(fd , STDIN_FILENO);
         }
 
