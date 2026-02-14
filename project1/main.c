@@ -8,13 +8,87 @@
 
 #define MAX_LINE 80  /* The maximum length command */
 
+#define MAX_ALIASES 10
+#define MAX_JOBS 10
+
+// Data Structures for additional features -----------
+// aslias struct
+struct Alias {
+    char name[MAX_LINE];
+    char command[MAX_LINE];
+};
+struct Alias aliases[MAX_ALIASES];
+int alias_count = 0;
+
+// bakcgroung process struct
+struct Job {
+    int id;
+    pid_t pid;
+    char command[MAX_LINE];
+};
+struct Job jobs[MAX_JOBS];
+int job_count = 0;
+
 void handle_signal(int signal);
 int parse_input(char *line , char **args , int *background);
 void execute_command(char **args , int background);
 
-// handle signal
-void handle_signal(int signal){
+// handle signal (ctrl+c)
+void handle_sigint(int signal){
     write(STDOUT_FILENO , "\nosh> " , 7);
+}
+// handle signal (ctrl+z) (handles child process death)
+void handle_sigchld(int signal){
+    int saved_errno = 0;
+    pid_t = pid;
+    while ((pid = waitpid(-1 , NULL , WNOHANG)) > 0){
+        remove_job(pid); // remove job from the list when done
+    }
+}
+
+// add an alias
+void add_alias(char *name , char *command){
+    if (alias_count < MAX_ALIASES){
+        strcpy(aliases[alias_count].name , name);
+        strcpy(aliases[alias_count].command , command);
+        alias_count++;
+        printf("Alias %s added.\n" , name);
+    }else{
+        printf("Maximum number of aliases reached.\n");
+    }
+}
+
+// add a job
+void add_job(pid_t pid , char *command){
+    if (job_count < MAX_JOBS){
+        jobs[job_count].id = job_count + 1;
+        jobs[job_count].pid = pid;
+        strcpy(jobs[job_count].command , command);
+        job_count++;
+    }
+}
+// remove a job
+void remove_job(pid_t pid){
+    int found = 0;
+    for (int i = 0 ; i < job_count ; i++){
+        if (jobs[i].pid == pid){
+            found = 1;
+            // you have to shift the jobs
+            for (int j = i ; j < job_count - 1 ; j++){
+                jobs[j] = jobs[j+1];
+                jobs[j].id = j + 1;
+            }
+            job_count--;
+            break;
+        }
+    }
+}
+// print jobs
+void print_jobs(){
+    printf("Running jobs:\n");
+    for (int i = 0 ; i < job_count ; i++){
+        printf("[%d] %s\n" , jobs[i].id , jobs[i].command);
+    }
 }
 
 // parses the input line into arguments
@@ -39,7 +113,29 @@ int parse_input(char *line , char **args , int *background){
 }
 
 // handles the pipes (|) and the redirects (> , <) and the background process (&)
-void execute_command(char **args , int background){
+void execute_command(char **args , int background , char *raw_command){
+
+    // --- ALIASES & JOBS --- (additional features)
+    if (strcmp(args[0] , "jobs") == 0){
+        print_jobs();
+        return;
+    }
+
+    if (strcmp(args[0] , "alias") == 0){
+        if (args[1] != NULL  && args[2] != NULL){
+            // reconstruct the command part
+            add_alias(args[1] , args[2]);
+        }else{
+            printf("Usage: alias <alias> <command>\n");
+        }
+        return;
+    }
+
+    char *alias_command = check_alias(args[0]);
+    if (alias_command != NULL){
+        args[0] = alias_command; // if current command is an alias, replace it with the actual command
+    }
+
 
     // finding the pipe index
     int pipe_idx = -1;
@@ -90,6 +186,8 @@ void execute_command(char **args , int background){
     pid_t pid = fork();
     if (pid == 0){
         // child process
+        signal(SIGINT , SIG_DFL);
+        signal(SIGCHLD , SIG_DFL);
 
         // handling > and < redirects
         for (int j = 0 ; args[j] != NULL ; j++){
@@ -113,7 +211,10 @@ void execute_command(char **args , int background){
     else{
         // parent process
         if (!background){
-            wait(NULL);
+            waitpid(pid , NULL , 0);
+        } else {
+            printf("[Job %d] %s\n" , job_count + 1 , args[0]);
+            add_job(pid , raw_command);
         }
     }
 }
@@ -127,8 +228,12 @@ int main(void)
     char history[MAX_LINE] = ""; // history to store the previous commands
     int has_history = 0; // flag to determine if the history is empty
 
-    // setting up the signal handler
-    signal(SIGINT , handle_signal);
+    char raw_command[MAX_LINE]; // raw command to store the original command
+
+    // setting up the signal handlers
+    signal(SIGINT , handle_sigint);
+    signal(SIGCHLD , handle_sigchld);
+    signal(SIGTSTP , SIG_IGN);
 
     while (should_run) {
         printf("osh> ");
@@ -161,6 +266,8 @@ int main(void)
             has_history = 1;
         }
 
+        strcpy(raw_command , line);
+
         // PARSING
         int background = 0;
         int arg_count = parse_input(line , args , &background);
@@ -173,7 +280,7 @@ int main(void)
             continue;
         }
 
-        execute_command(args , background);
+        execute_command(args , background , raw_command);
 
         /**
         * After reading user input, the steps are:
