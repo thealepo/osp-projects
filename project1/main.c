@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <ctype.h>
 
 #define MAX_LINE 80  /* The maximum length command */
 
@@ -30,6 +31,7 @@ struct Job {
 struct Job jobs[MAX_JOBS];
 int job_count = 0;
 
+// history array
 char history[MAX_HISTORY][MAX_LINE];
 int history_count = 0;
 
@@ -45,6 +47,8 @@ void remove_job(pid_t pid);
 void print_jobs();
 void add_history(char *line);
 void print_history();
+void bring_job_foreground(int job_id);
+char *get_history(int index);
 
 // handle signal (ctrl+c)
 void handle_sigint(int signal){
@@ -64,6 +68,9 @@ void add_alias(char *name , char *command){
         strcpy(aliases[alias_count].name , name);
         strcpy(aliases[alias_count].command , command);
         alias_count++;
+        printf("Alias added: %s -> %s\n" , name , command);
+    }else{
+        printf("Alias list is full.\n");
     }
 }
 // check an alias
@@ -139,15 +146,77 @@ void print_history() {
     }
 }
 
+void bring_job_foreground(int job_id){
+    int found_idx = -1;
+    for (int i = 0 ; i < job_count ; i++){
+        if (jobs[i].id == job_id){
+            found_idx = i;
+            break;
+        }
+    }
+
+    if (found_idx == -1){
+        printf("Job [%d] %s to foreground.\n" , job_id , jobs[found_idx].command);
+        pid_t pid = jobs[found_idx].pid;
+
+        // remove from background
+        remove_job(pid);
+
+        // wait for it to finish
+        waitpid(pid , NULL , 0);
+    }else{
+        printf("Job [%d] not found.\n" , job_id);
+    }
+}
+
+char *get_history(int index){
+    if (history_count == 0) return NULL;
+
+    int items_available = (history_count > MAX_HISTORY) ? MAX_HISTORY : history_count;
+    int first_available_index = (history_count > MAX_HISTORY) ? (history_count - MAX_HISTORY + 1) : 1;
+
+    // checking if the index is valid
+    if (index < first_available_index || index > history_count){
+        return NULL;
+    }
+
+    // mapping the display number
+    int actual_index = (index - 1) % MAX_HISTORY;
+    return history[actual_index];
+}
+
 // parses the input line into arguments
 int parse_input(char *line , char **args , int *background){
     int i = 0;
     *background = 0;
-    char *token = strtok(line , " ");
+    int length = strlen(line);
+    int start = -1;
+    int in_quotes = 0;
 
-    while (token != NULL){
-        args[i++] = token;
-        token = strtok(NULL , " ");
+    for (int j = 0 ; j <= length ; j++) {
+        if (line[j] == '\"') {
+            in_quotes = !in_quotes;
+            if (start == -1) start = j + 1; // start of quoted string (skipping quote)
+            else if (!in_quotes) {
+                 // end of quoted string
+                 line[j] = '\0'; // terminate
+                 args[i++] = &line[start];
+                 start = -1;
+            }
+            continue;
+        }
+
+        if (!in_quotes) {
+            if (isspace(line[j]) || line[j] == '\0') {
+                if (start != -1) {
+                    line[j] = '\0';
+                    args[i++] = &line[start];
+                    start = -1;
+                }
+            } else {
+                if (start == -1) start = j;
+            }
+        }
     }
     args[i] = NULL;
 
@@ -191,20 +260,25 @@ void execute_command(char **args , int background , char *raw_command){
     if (pipe_idx != -1){
         args[pipe_idx] = NULL; // splitting the args
         int fd[2];
-        pipe(fd);
+        if (pipe(fd) == -1){
+            perror("Pipe Failed.");
+            return;
+        }
 
         if (fork() == 0){
-            dup2(fd[1] , STDOUT_FILENO);
+            dup2(fd[1] , STDOUT_FILENO); // writing to the pipe
             close(fd[0]);
             close(fd[1]);
             execvp(args[0] , args);
+            perror("Execution cmd1 Failed.");
             exit(1);
         }
         if (fork() == 0){
-            dup2(fd[0] , STDIN_FILENO);
+            dup2(fd[0] , STDIN_FILENO); // reading from the pipe
             close(fd[0]);
             close(fd[1]);
             execvp(args[pipe_idx + 1] , &args[pipe_idx + 1]);
+            perror("Execution cmd2 Failed.");
             exit(1);
         }
 
@@ -218,17 +292,20 @@ void execute_command(char **args , int background , char *raw_command){
     // PART 2 & 4: > and < redirects & background process (&)
     pid_t pid = fork();
     if (pid == 0) {
+        // child
+        signal(SIGINT , SIG_DFL); // reset signal handler
+
         for (int j = 0; args[j] != NULL; j++) {
             if (strcmp(args[j], ">") == 0) {
 
-                int fd = open(args[j + 1] , O_CREAT | O_WRONLY | O_TRUNC , 0644);
+                int fd = open(args[j + 1] , O_CREAT | O_WRONLY | O_TRUNC , 0644); // opening the file for writing
                 dup2(fd , STDOUT_FILENO);
                 close(fd);
                 args[j] = NULL;
 
             } else if (strcmp(args[j], "<") == 0) {
 
-                int fd = open(args[j + 1] , O_RDONLY);
+                int fd = open(args[j + 1] , O_RDONLY); // opening the file for reading
                 dup2(fd, STDIN_FILENO);
                 close(fd);
                 args[j] = NULL;
@@ -240,6 +317,7 @@ void execute_command(char **args , int background , char *raw_command){
         perror("Execution failed");
         exit(1);
     } else {
+        // parent
         if (!background) waitpid(pid , NULL , 0);
         else add_job(pid , raw_command);
     }
@@ -249,12 +327,8 @@ int main(void)
 {
     char *args[MAX_LINE/2 + 1]; /* command line arguments */
     int should_run = 1; /* flag to determine when to exit program */
-
-    char line[MAX_LINE] = ""; // line to store the user input
-    char last_command[MAX_LINE] = ""; // history to store the previous commands
-    int has_history = 0; // flag to determine if the history is empty
-
-    char raw_command[MAX_LINE]; // raw command to store the original command
+    char line[MAX_LINE];
+    char raw_command[MAX_LINE];
 
     // setting up the signal handlers
     signal(SIGINT , handle_sigint);
@@ -266,11 +340,8 @@ int main(void)
         fflush(stdout);
 
         if (!fgets(line , MAX_LINE , stdin)){
-            if (feof(stdin)){
-                printf("\n");
-                break;
-            }
-            continue;
+            printf("\n");
+            break;
         }
 
         // remove the newline character from the input
@@ -281,18 +352,17 @@ int main(void)
 
         // --- PART 3: HISTORY (!!) ---
         if (strcmp(line , "!!") == 0){
-            if (!has_history){
+            if (history_count == 0){
                 printf("No previous commands in history.\n");
                 continue;
             }
-            printf("%s\n" , history);
-            strcpy(line , history);
-        }else{
-            strcpy(history , line);
-            has_history = 1;
-        }
 
-        strcpy(raw_command , line);
+            int last_index = (history_count - 1) % MAX_HISTORY;
+            strcpy(line , history[last_index]);
+            printf("%s\n" , line); // echoing the last command
+        }
+        add_history(line);
+        strcpy(raw_command , line); // storing the original command
 
         // PARSING
         int background = 0;
