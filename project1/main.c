@@ -7,6 +7,115 @@
 
 #define MAX_LINE 80  /* The maximum length command */
 
+void handle_signal(int signal);
+int parse_input(char *line , char **args , int *background);
+void execute_command(char **args , int background);
+
+// handle signal
+void handle_signal(int signal){
+    write(STDOUT_FILENO , "Process terminated by signal\n" , 25);
+    exit(1);
+}
+
+// parses the input line into arguments
+int parse_input(char *line , char **args , int *background){
+    int i = 0;
+    *background = 0;
+    char *token = strtok(line , " ");
+
+    while (token != NULL){
+        args[i++] = token;
+        token = strtok(NULL , " ");
+    }
+    args[i] = NULL;
+
+    if (i > 0 && strcmp(args[i-1] , "&") == 0){
+        *background = 1;
+        args[i-1] = NULL;
+        i--;
+    }
+    return i;
+}
+
+// handles the pipes (|) and the redirects (> , <) and the background process (&)
+void execute_command(char **args , int background){
+
+    // finding the pipe index
+    int pipe_idx = -1;
+    for (int j = 0 ; args[j] != NULL ; j++){
+        if (strcmp(args[j] , "|") == 0){
+            pipe_idx = j;
+            break;
+        }
+    }
+
+    // --- PART 5: PIPES (|) ---
+    if (pipe_idx != -1){
+        args[pipe_idx] = NULL; // splitting the args
+        char **cmd2 = &args[pipe_idx + 1];
+
+        int pipefd[2];
+        if (pipe(pipefd) == -1){
+            return;
+        }
+
+        pid_t p1 = fork();
+        if (p1 == 0){
+            dup2(pipefd[1] , STDOUT_FILENO); // writing to the pipe
+            close(pipefd[0]);
+            close(pipefd[1]);
+            execvp(args[0] , args);
+            exit(1);
+        }
+        
+        pid_t p2 = fork();
+        if (p2 == 0){
+            dup2(pipefd[0] , STDIN_FILENO); // reading from the pipe
+            close(pipefd[0]);
+            close(pipefd[1]);
+            execvp(cmd2[0] , cmd2);
+            exit(1);
+        }
+
+        close(pipefd[0]);
+        close(pipefd[1]);
+        wait(NULL);
+        wait(NULL);
+        return;
+    }
+
+    // PART 2 & 4: > and < redirects & background process (&)
+    pid_t pid = fork();
+    if (pid == 0){
+        // child process
+
+        // handling > and < redirects
+        for (int j = 0 ; j < i ; j++){
+            if (strcmp(args[j] , ">") == 0){
+                int fd = open(args[j+1] , O_CREAT | O_WRONLY | O_TRUNC , 0644);
+                dup2(fd , STDOUT_FILENO);
+                close(fd);
+                args[j] = NULL;
+            } else if (strcmp(args[j] , "<") == 0){
+                int fd = open(args[j+1] , O_RDONLY);
+                dup2(fd , STDIN_FILENO);
+                close(fd);
+                args[j] = NULL;
+            }
+        }
+
+        execvp(args[0] , args);
+        printf("Invalid command.\n");
+        exit(1);
+    }
+    else{
+        // parent process
+        if (!background){
+            wait(NULL);
+        }
+    }
+}
+
 int main(void)
 {
     char *args[MAX_LINE/2 + 1]; /* command line arguments */
@@ -17,120 +126,50 @@ int main(void)
     int has_history = 0; // flag to determine if the history is empty
 
     while (should_run) {
-        printf("osh> "); // prompt
+        printf("osh> ");
         fflush(stdout);
 
         if (!fgets(line , MAX_LINE , stdin)){
-            break;
+            if (feof(stdin)){
+                printf("\n");
+                break;
+            }
+            continue;
         }
 
-        // remove the newline character from the line
+        // remove the newline character from the input
         line[strcspn(line , "\n")] = 0;
 
-        // --- PART 3 (!! History) ---
-        if (strcmp(line , "!!\n") == 0){ // if the user inputs !!, print the previous command
+        // skip any empty lines
+        if (strlen(line) == 0) continue;
+
+        // --- PART 3: HISTORY (!!) ---
+        if (strcmp(line , "!!") == 0){
             if (!has_history){
-                printf("No previous commands.\n");
+                printf("No previous commands in history.\n");
                 continue;
             }
+            printf("%s\n" , history);
             strcpy(line , history);
-            printf("%s\n" , line);
-        }
-        else{ // if the user inputs a command, add it to the history
+        }else{
             strcpy(history , line);
             has_history = 1;
         }
 
-        // --- PART 2 ---
-        char *token = strtok(line , " "); // splitting the line into tokens
-        int i = 0;
-        while (token != NULL){
-            args[i++] = token;
-            token = strtok(NULL , " ");
-        } // looping through the tokens until NULL, adding them to the args array
-        args[i] = NULL; // adding NULL to the end of the args array
-        // args -> [ps , ael , NULL] **EXAMPLE**
-
-        // background execution check
+        // PARSING
         int background = 0;
-        if (i > 0 && strcmp(args[i-1] , "&") == 0){
-            background = 1;
-            args[i-1] = NULL;
+        int arg_count = parse_input(line , args , &background);
+
+        if (arg_count == 0) continue;
+
+        // exit command
+        if (strcmp(args[0] , "exit") == 0){
+            should_run = 0;
+            continue;
         }
 
-        // --- PART 5 (PIPE) ---
-        int pipe_index = -1;
-        for (int j = 0 ; args[j] != NULL ; j++){
-            if (strcmp(args[j] , "|") == 0){
-                pipe_index = j;
-                break;
-            }
-        }
+        execute_command(args , background);
 
-        if (pipe_index != -1){
-            args[pipe_index] = NULL; // terminate the first command
-            char **cmd2 = &args[pipe_index + 1]; // second command
-
-            int pipefd[2];
-            pipe(pipefd); // creating a pipe
-
-            pid_t p1 = fork();
-            if (p1 == 0){
-                // child 1 writes to the pipe
-                dup2(pipefd[1] , STDOUT_FILENO);
-                close(pipefd[0]);
-                close(pipefd[1]);
-                execvp(args[0] , args);
-                exit(1);
-            }
-
-            pid_t p2 = fork();
-            if (p2 == 0){
-                // child 2 reads from the pipe
-                dup2(pipefd[0] , STDIN_FILENO);
-                close(pipefd[0]);
-                close(pipefd[1]);
-                execvp(cmd2[0] , cmd2);
-                exit(1);
-            }
-
-            // parent closes and waits
-            close(pipefd[0]);
-            close(pipefd[1]);
-            wait(NULL);
-            wait(NULL);
-            continue; // continue to the next iteration of the loop
-        }
-
-
-        // --- PART 4 (> and <) ---
-        pid_t pid = fork(); // forking a child process
-        if (pid == 0){
-            for (int j = 0 ; j < i ; j++){
-
-                if (strcmp(args[j] , ">") == 0){
-                    int fd = open(args[j+1] , O_CREAT | O_WRONLY | O_TRUNC , 0644);
-                    dup2(fd , STDOUT_FILENO);
-                    close(fd);
-                    args[j] = NULL;
-
-                } else if (strcmp(args[j] , "<") == 0){
-                    int fd = open(args[j+1] , O_RDONLY);
-                    dup2(fd , STDIN_FILENO);
-                    close(fd);
-                    args[j] = NULL;
-                }
-            }
-
-            execvp(args[0] , args);
-            printf("Invalid command.\n");
-            exit(1);
-        }
-        else{
-            if (!background){
-                wait(NULL);
-            }
-        }
         /**
         * After reading user input, the steps are:
         * (1) fork a child process using fork()
