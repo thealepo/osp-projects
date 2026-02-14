@@ -1,0 +1,44 @@
+Project: COP 4610 Programming Assignment 1 - UNIX Shell
+
+
+STEP 1: Compilation
+
+To compile, run
+```
+gcc main.c -o osh
+```
+
+Start the shell with
+```
+./osh
+```
+
+---
+
+STEP 2: Functionality
+
+1. Basic Commands
+    ls
+2. History Features
+    !!
+3. Redirection
+    ls > out.txt
+    sort < out.txt
+4. Pipes
+    ls -l | wc -l
+5. Background Executions
+    sleep 20 &
+
+---
+
+STEP 3: Additional Features
+
+Job Control: type `jobs`
+Aliases: type ```alias ll "ls -l" ```, then type `ll`
+Signal Handling: press `Ctrl+C`
+
+---
+
+STEP 4: Ending
+
+Type `exit`
