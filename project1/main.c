@@ -239,6 +239,14 @@ void execute_command(char **args , int background , char *raw_command){
         print_history();
         return;
     }
+    if (strcpt(args[0] , "fg") == 0){
+        if (args[1] == NULL){
+            printf("Usage: fg [job_id]\n");
+        }else{
+            bring_job_foreground(atoi(args[1]));
+        }
+        return;
+    }
     if (strcmp(args[0] , "alias") == 0 && args[1] && args[2]){
         add_alias(args[1] , args[2]);
         return;
