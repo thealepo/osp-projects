@@ -239,7 +239,7 @@ void execute_command(char **args , int background , char *raw_command){
         print_history();
         return;
     }
-    if (strcpt(args[0] , "fg") == 0){
+    if (strcmp(args[0] , "fg") == 0){
         if (args[1] == NULL){
             printf("Usage: fg [job_id]\n");
         }else{
@@ -359,15 +359,30 @@ int main(void)
         if (strlen(line) == 0) continue;
 
         // --- PART 3: HISTORY (!!) ---
-        if (strcmp(line , "!!") == 0){
-            if (history_count == 0){
-                printf("No previous commands in history.\n");
-                continue;
+        if (line[0] == '!'){
+            char *retrieved_command = NULL;
+
+            if (line[1] == '!'){
+                // case is last command !!
+                if (history_count == 0){
+                    printf("No previous command.\n");
+                    continue;
+                }
+                retrieved_command = get_history(history_count);
+            }else if (isdigit(line[1])){
+                // case is !N
+                int target = atoi(&line[1]);
+                retrieved_command = get_history(target);
+                if (retrieved_command == NULL){
+                    printf("No such command in history.\n");
+                    continue;
+                }
             }
 
-            int last_index = (history_count - 1) % MAX_HISTORY;
-            strcpy(line , history[last_index]);
-            printf("%s\n" , line); // echoing the last command
+            if (retrieved_command != NULL){
+                printf("%s\n" , retrieved_command);
+                strcpy(line , retrieved_command);
+            }
         }
         add_history(line);
         strcpy(raw_command , line); // storing the original command
