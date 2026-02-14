@@ -33,8 +33,8 @@ int main(void)
                 printf("No previous commands.\n");
                 continue;
             }
-            printf("%s\n" , history);
             strcpy(line , history);
+            printf("%s\n" , line);
         }
         else{ // if the user inputs a command, add it to the history
             strcpy(history , line);
