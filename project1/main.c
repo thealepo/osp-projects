@@ -107,13 +107,17 @@ int main(void)
         pid_t pid = fork(); // forking a child process
         if (pid == 0){
             for (int j = 0 ; j < i ; j++){
+
                 if (strcmp(args[j] , ">") == 0){
                     int fd = open(args[j+1] , O_CREAT | O_WRONLY | O_TRUNC , 0644);
                     dup2(fd , STDOUT_FILENO);
+                    close(fd);
                     args[j] = NULL;
+
                 } else if (strcmp(args[j] , "<") == 0){
                     int fd = open(args[j+1] , O_RDONLY);
                     dup2(fd , STDIN_FILENO);
+                    close(fd);
                     args[j] = NULL;
                 }
             }
