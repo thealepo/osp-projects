@@ -29,9 +29,15 @@ struct Job {
 struct Job jobs[MAX_JOBS];
 int job_count = 0;
 
+// THE FUNCTIONS
 void handle_signal(int signal);
 int parse_input(char *line , char **args , int *background);
-void execute_command(char **args , int background);
+void execute_command(char **args , int background , char *raw_command);
+void add_alias(char *name , char *command);
+char *check_alias(char *name);
+void add_job(pid_t pid , char *command);
+void remove_job(pid_t pid);
+void print_jobs();
 
 // handle signal (ctrl+c)
 void handle_sigint(int signal){
@@ -39,8 +45,7 @@ void handle_sigint(int signal){
 }
 // handle signal (ctrl+z) (handles child process death)
 void handle_sigchld(int signal){
-    int saved_errno = 0;
-    pid_t = pid;
+    pid_t pid;
     while ((pid = waitpid(-1 , NULL , WNOHANG)) > 0){
         remove_job(pid); // remove job from the list when done
     }
@@ -56,6 +61,15 @@ void add_alias(char *name , char *command){
     }else{
         printf("Maximum number of aliases reached.\n");
     }
+}
+// check an alias
+char *check_alias(char *name){
+    for (int i = 0 ; i < alias_count ; i++){
+        if (strcmp(aliases[i].name , name) == 0){
+            return aliases[i].command;
+        }
+    }
+    return NULL;
 }
 
 // add a job
@@ -233,7 +247,7 @@ int main(void)
     // setting up the signal handlers
     signal(SIGINT , handle_sigint);
     signal(SIGCHLD , handle_sigchld);
-    signal(SIGTSTP , SIG_IGN);
+    signal(SIGTSTP , SIG_IGN); // ignore ctrl+z
 
     while (should_run) {
         printf("osh> ");
