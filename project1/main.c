@@ -4,6 +4,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #define MAX_LINE 80  /* The maximum length command */
 
@@ -13,8 +14,7 @@ void execute_command(char **args , int background);
 
 // handle signal
 void handle_signal(int signal){
-    write(STDOUT_FILENO , "Process terminated by signal\n" , 25);
-    exit(1);
+    write(STDOUT_FILENO , "\nosh> " , 7);
 }
 
 // parses the input line into arguments
@@ -29,9 +29,10 @@ int parse_input(char *line , char **args , int *background){
     }
     args[i] = NULL;
 
+    // checking & for background process
     if (i > 0 && strcmp(args[i-1] , "&") == 0){
         *background = 1;
-        args[i-1] = NULL;
+        args[i-1] = NULL; // removing the & from the args
         i--;
     }
     return i;
@@ -77,6 +78,7 @@ void execute_command(char **args , int background){
             exit(1);
         }
 
+        // parent closes and waits for the child processes
         close(pipefd[0]);
         close(pipefd[1]);
         wait(NULL);
@@ -90,7 +92,7 @@ void execute_command(char **args , int background){
         // child process
 
         // handling > and < redirects
-        for (int j = 0 ; j < i ; j++){
+        for (int j = 0 ; args[j] != NULL ; j++){
             if (strcmp(args[j] , ">") == 0){
                 int fd = open(args[j+1] , O_CREAT | O_WRONLY | O_TRUNC , 0644);
                 dup2(fd , STDOUT_FILENO);
@@ -124,6 +126,9 @@ int main(void)
     char line[MAX_LINE]; // line to store the user input
     char history[MAX_LINE] = ""; // history to store the previous commands
     int has_history = 0; // flag to determine if the history is empty
+
+    // setting up the signal handler
+    signal(SIGINT , handle_signal);
 
     while (should_run) {
         printf("osh> ");
