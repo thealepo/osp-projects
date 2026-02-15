@@ -252,8 +252,10 @@ void execute_command(char **args , int background , char *raw_command){
         return;
     }
 
+    /*
     char *alias_command = check_alias(args[0]);
     if (alias_command) args[0] = alias_command; // if current command is an alias, replace it with the actual command
+    */
 
     // finding the pipe index
     int pipe_idx = -1;
@@ -321,7 +323,33 @@ void execute_command(char **args , int background , char *raw_command){
             }
         }
 
-        execvp(args[0] , args);
+        // alias handling
+        char *alias_command = check_alias(args[0]);
+        if (alias_command != NULL){
+            char *new_args[MAX_LINE];
+            int index = 0;
+
+            char alias_copy[MAX_LINE];
+            strcpy(alias_copy , alias_command);
+
+            // tokenizing the alias command
+            char *token = strtok(alias_copy, " \t\n");
+            while(token != NULL) {
+                new_args[index++] = token;
+                token = strtok(NULL, " \t\n");
+            }
+
+            for (int k = 1; args[k] != NULL; k++) {
+                new_args[index++] = args[k];
+            }
+            new_args[index] = NULL; // null terminate the list
+
+            execvp(new_args[0] , new_args);
+        }else{
+            // no alias found, execute the original command
+            execvp(args[0] , args);
+        }
+
         perror("Execution failed");
         exit(1);
     } else {
