@@ -1,1 +1,26 @@
-sample
+Project: COP 4610 Programming Assignment 2 - Multithreaded Sorting
+
+
+STEP 1: Compilation
+
+To compile, run
+```
+gcc -pthread -o sorting main.c
+```
+
+Start the shell with
+```
+./sorting
+```
+
+---
+
+STEP 2: Functionality
+
+1. Figure 1 Example
+    - Initialize the size to 10
+    - Input the following numbers in order, pressing 'Enter' after every number:
+        7, 12, 19, 3, 18, 4, 2, 6, 15, 8
+2. Random Example
+    - Initialize an array size to any size of your choice
+    - Input any numbers

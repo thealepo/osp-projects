@@ -25,7 +25,7 @@ void *bubble_sort(void *arg){
     int end = data->end;
 
     for (int i = start ; i < end-1 ; i++){
-        for (int j = start ; j < end-1-(i-start) ; j++){
+        for (int j = start ; j < end-1-i ; j++){
             if (unsorted_array[j] > unsorted_array[j+1]){
                 int temp = unsorted_array[j];
                 unsorted_array[j] = unsorted_array[j+1];
