@@ -36,7 +36,7 @@ void *bubble_sort(void *arg){
     pthread_exit(0);
 }
 
-void merge(void *arg){
+void *merge(void *arg){
     thread_data *data = (thread_data *)arg;
 
     // initialize indices
@@ -68,6 +68,7 @@ void merge(void *arg){
     }
 
     pthread_exit(0);
+    return NULL;
 }
 
 // main function
@@ -85,6 +86,9 @@ int main(void){
     for (int i = 0 ; i < array_size ; i++){
         scanf("%d" , &unsorted_array[i]);
     }
+
+    printf("\n");
+    printf("--------------------------------\n");
 
     printf("Unsorted array: ");
     for (int i = 0 ; i < array_size ; i++){
@@ -114,7 +118,7 @@ int main(void){
         printf("%d " , sorted_array[i]);
     }
     printf("\n");
-    
+    printf("--------------------------------\n");
 
     free(unsorted_array);
     free(sorted_array);
