@@ -5,12 +5,12 @@ STEP 1: Compilation
 
 To compile, run
 ```
-gcc -pthread -o sorting main.c
+gcc -pthread -o assignment2 main.c
 ```
 
-Start the shell with
+Start the program with
 ```
-./sorting
+./assignment2
 ```
 
 ---
